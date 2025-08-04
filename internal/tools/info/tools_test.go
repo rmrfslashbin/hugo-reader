@@ -102,7 +102,7 @@ func TestFormatInfoSimple(t *testing.T) {
 	
 	// Check JSON structure
 	assert.True(t, strings.HasPrefix(result, "{\n"))
-	assert.True(t, strings.HasSuffix(result, "\n  }"))
+	assert.True(t, strings.HasSuffix(result, "\\n  }"))
 }
 
 func TestFormatInfoSimpleWithRuntime(t *testing.T) {

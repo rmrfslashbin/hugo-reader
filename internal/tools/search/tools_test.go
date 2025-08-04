@@ -12,7 +12,7 @@ func TestNew(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, tool)
 	assert.Equal(t, "hugo_reader_search", tool.Name())
-	assert.Equal(t, "Search content across a Hugo site with support for filters and Hugo-specific search indices", tool.Description())
+	assert.Equal(t, "Search content across Hugo sites by keywords. Tries Hugo-native search endpoints first, then falls back to content scanning. Supports filters by content_type, taxonomy, and term. Use for finding content when you don't know exact paths.", tool.Description())
 	assert.NotNil(t, tool.httpClient)
 }
 

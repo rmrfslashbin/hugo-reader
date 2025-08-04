@@ -14,7 +14,7 @@ func TestNew(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, tool)
 	assert.Equal(t, "hugo_reader_cache_manager", tool.Name())
-	assert.Equal(t, "Manage Hugo reader cache: clear all entries, get statistics, or clean expired entries", tool.Description())
+	assert.Equal(t, "Manage Hugo reader cache with smart HTTP validation. Actions: 'clear' (remove all/specific entries), 'stats' (cache statistics), 'clean' (remove expired entries). Use 'clear' if getting stale data.", tool.Description())
 }
 
 func TestClearCacheRequest_Validate(t *testing.T) {

@@ -12,7 +12,7 @@ func TestNew(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, tool)
 	assert.Equal(t, "hugo_reader_get_content", tool.Name())
-	assert.Equal(t, "Get content from a Hugo site with support for bulk retrieval and flexible response options", tool.Description())
+	assert.Equal(t, "Get content from Hugo sites by path. Supports bulk retrieval and flexible response options (metadata, body, or both). Tries multiple endpoint patterns automatically. Example paths: '/posts/my-post/', '/recipes/cookies/', '/about/'. Use with or without trailing slashes.", tool.Description())
 	assert.NotNil(t, tool.httpClient)
 }
 
