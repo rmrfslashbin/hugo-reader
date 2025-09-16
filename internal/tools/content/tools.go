@@ -189,9 +189,13 @@ func (t *Tool) getContentForPath(siteURL *url.URL, path string, include []string
 	}
 
 	// Try common Hugo content endpoints with better path handling
+	// Also try underscore variations since Hugo may convert hyphens to underscores
+	underscorePath := strings.ReplaceAll(cleanPath, "-", "_")
 	contentEndpoints := []EndpointConfig{
 		{path: fmt.Sprintf("/%s.json", cleanPath), validator: validateContentStructure},
 		{path: fmt.Sprintf("/%s/index.json", cleanPath), validator: validateContentStructure},
+		{path: fmt.Sprintf("/%s.json", underscorePath), validator: validateContentStructure},
+		{path: fmt.Sprintf("/%s/index.json", underscorePath), validator: validateContentStructure},
 		{path: fmt.Sprintf("/content/%s.json", cleanPath), validator: validateContentStructure},
 		{path: fmt.Sprintf("/content/%s/index.json", cleanPath), validator: validateContentStructure},
 		{path: "/index.json", validator: validateHugoIndexForContent},
@@ -262,6 +266,9 @@ func (t *Tool) getContentForPath(siteURL *url.URL, path string, include []string
 
 	// Extract content from validated JSON
 	content := extractContent(contentData, path, include, usedEndpoint)
+	if content == nil {
+		return nil, fmt.Errorf("content not found in index")
+	}
 	return content, nil
 }
 
@@ -294,7 +301,21 @@ func validateHugoIndexForContent(data []byte) bool {
 	}
 
 	parsed := gjson.ParseBytes(data)
-	
+
+	// Check if it's a direct array (common in Hugo index.json)
+	if parsed.IsArray() {
+		arr := parsed.Array()
+		if len(arr) > 0 {
+			// Check if at least one item has content-like fields
+			for _, item := range arr {
+				if item.Get("content").Exists() || item.Get("body").Exists() ||
+					item.Get("summary").Exists() || item.Get("title").Exists() {
+					return true
+				}
+			}
+		}
+	}
+
 	// Look for pages with content
 	if pages := parsed.Get("pages"); pages.Exists() && pages.IsArray() {
 		hasContentData := false
@@ -307,7 +328,7 @@ func validateHugoIndexForContent(data []byte) bool {
 		})
 		return hasContentData
 	}
-	
+
 	return validateContentStructure(data)
 }
 
@@ -315,35 +336,86 @@ func validateHugoIndexForContent(data []byte) bool {
 func extractContent(data []byte, requestedPath string, include []string, sourceEndpoint string) map[string]interface{} {
 	parsed := gjson.ParseBytes(data)
 	content := make(map[string]interface{})
-	
+
 	includeMetadata := contains(include, "metadata") || contains(include, "both")
 	includeBody := contains(include, "body") || contains(include, "both")
-	
+
 	// Set the path
 	content["path"] = requestedPath
 	content["source_endpoint"] = sourceEndpoint
-	
+
+	// Clean the requested path for comparison
+	cleanPath := strings.TrimPrefix(requestedPath, "/")
+	cleanPath = strings.TrimSuffix(cleanPath, "/")
+
 	// If this is a pages array, find the matching page
 	if pages := parsed.Get("pages"); pages.Exists() && pages.IsArray() {
 		var matchedPage gjson.Result
 		pages.ForEach(func(key, page gjson.Result) bool {
 			if pageURL := page.Get("url"); pageURL.Exists() {
-				if strings.Contains(pageURL.String(), requestedPath) || strings.Contains(requestedPath, pageURL.String()) {
+				// Clean and normalize URL for comparison
+				pageURLClean := strings.TrimPrefix(pageURL.String(), "/")
+				pageURLClean = strings.TrimSuffix(pageURLClean, "/")
+				if pageURLClean == cleanPath {
 					matchedPage = page
 					return false // Stop iteration
 				}
 			}
 			if pageSlug := page.Get("slug"); pageSlug.Exists() {
-				if strings.Contains(pageSlug.String(), requestedPath) || strings.Contains(requestedPath, pageSlug.String()) {
+				// Check slug match
+				if strings.Contains(cleanPath, pageSlug.String()) {
 					matchedPage = page
 					return false // Stop iteration
 				}
 			}
 			return true
 		})
-		
+
 		if matchedPage.Exists() {
 			parsed = matchedPage
+		} else {
+			// If no exact match, return nil to indicate content not found
+			return nil
+		}
+	} else if parsed.IsArray() {
+		// Handle direct array format (common in Hugo index.json)
+		var matchedItem gjson.Result
+		found := false
+
+		parsed.ForEach(func(key, item gjson.Result) bool {
+			// Check various URL/path fields
+			for _, field := range []string{"url", "permalink", "path", "slug"} {
+				if itemPath := item.Get(field); itemPath.Exists() {
+					// Clean and normalize for comparison
+					itemPathClean := strings.TrimPrefix(itemPath.String(), "/")
+					itemPathClean = strings.TrimSuffix(itemPathClean, "/")
+					if itemPathClean == cleanPath {
+						matchedItem = item
+						found = true
+						return false // Stop iteration
+					}
+				}
+			}
+
+			// Also check if title matches the last part of the path
+			if title := item.Get("title"); title.Exists() {
+				titleSlug := strings.ToLower(strings.ReplaceAll(title.String(), " ", "-"))
+				pathParts := strings.Split(cleanPath, "/")
+				if len(pathParts) > 0 && titleSlug == pathParts[len(pathParts)-1] {
+					matchedItem = item
+					found = true
+					return false // Stop iteration
+				}
+			}
+
+			return true
+		})
+
+		if found {
+			parsed = matchedItem
+		} else {
+			// If no match found in array, return nil
+			return nil
 		}
 	}
 	
