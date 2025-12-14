@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "hugo-reader": {
+      "type": "stdio",
+      "command": "hugo-reader",
+      "args": ["server"],
+      "env": {
+        "LOG_LEVEL": "info"
+      }
+    }
+  }
+}
